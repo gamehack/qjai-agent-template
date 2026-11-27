@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check Modal adapter syntax
+        run: python -m py_compile modal_app.py modal_client.py
       - name: Check committed dependency lock
         run: test -s requirements.lock
       - name: Build amd64 container
