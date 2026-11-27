@@ -1,0 +1,51 @@
+name: Modal smoke acceptance
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modal-smoke-acceptance
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      QJAI_AGENT_IMAGE: ghcr.io/gamehack/qjai-agent-template@sha256:0c40fe793befe1d99c74ab5e30848c8af1ad55af80e27d1e349c14126e9e84a3
+      QJAI_MODAL_APP: qjai-agent-template
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Modal client
+        run: pip install -r requirements-modal.txt
+      - name: Deploy and execute smoke
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          test -n "$MODAL_TOKEN_ID" && test -n "$MODAL_TOKEN_SECRET" || {
+            echo "::error::Configure MODAL_TOKEN_ID and MODAL_TOKEN_SECRET repository secrets first."
+            exit 1
+          }
+          modal deploy modal_app.py
+          python - <<'PY'
+          import json
+          import os
+          import modal
+          run_id = "gha-" + os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]
+          fn = modal.Function.from_name(os.environ["QJAI_MODAL_APP"], "run_smoke")
+          call = fn.spawn(run_id)
+          print("call_id:", call.object_id, flush=True)
+          result = call.get(timeout=180)
+          assert result["run_id"] == run_id
+          assert result["status"] == "succeeded"
+          assert result["mode"] == "smoke"
+          print(json.dumps(result, ensure_ascii=False))
+          PY
