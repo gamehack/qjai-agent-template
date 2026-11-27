@@ -1,0 +1,2 @@
+# Initial compatibility range; lock exact dependencies before production.
+openai-agents>=0.1
