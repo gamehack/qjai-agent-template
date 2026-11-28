@@ -51,3 +51,7 @@ stdout 输出单行 JSON 结果，包含 run_id、agent_name、business_date、s
 ## 性能基准测试
 
 [Agent performance benchmark](https://github.com/gamehack/qjai-agent-template/actions/workflows/benchmark.yml) 为手动测试工作流；默认无网络 smoke，不发布镜像、不部署 Modal。正式业务测试必须使用无副作用的 fixture，显式授权 live 模型调用。CI 对构建镜像自动进行三次离线 benchmark。报告含运行时间、CPU、内存、Token 及样本统计，不包含正文或密钥。详细定义与上线流程：[性能测试规范](docs/benchmark.md)。
+
+## 工程命名规范
+
+新增业务 Agent 必须使用 `qjai-agent-<business>` 小写 kebab-case 仓库名。CI 自动校验名称并推导 GHCR 镜像、OCI title 标签及默认 Agent 标识。完整规则见 [命名规范](docs/naming.md)。

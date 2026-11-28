@@ -22,6 +22,8 @@ Default baseline: one Docker CPU quota, 512 MiB memory, fresh independent contai
     docker build --platform linux/amd64 -t qjai-benchmark:local .
     python scripts/benchmark.py --image qjai-benchmark:local --repeats 3 --timeout-seconds 60
 
+For a downstream Agent, build with `--build-arg QJAI_PROJECT_NAME=qjai-agent-<business>` and benchmark with `--project-name qjai-agent-<business>` (CI derives both automatically). Temporary sample container names include the project and a unique test ID.
+
 Reports are written to benchmark-report.json; GitHub Actions uploads the sanitized file for 30 days and renders metric summary in the run.
 
 ## Promotion checklist

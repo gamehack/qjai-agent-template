@@ -11,6 +11,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+if __package__:
+    from .check_naming import validate_project, test_container_name
+else:
+    from check_naming import validate_project, test_container_name
+
 METRICS = ("container_wall_ms", "business_wall_ms", "agent_duration_ms",
            "cpu_seconds", "container_memory_peak_bytes", "child_max_rss_bytes")
 USAGE_KEYS = ("requests", "input_tokens", "output_tokens", "total_tokens")
@@ -39,7 +44,7 @@ def summarize(samples):
 
 def run_sample(args, image_id):
     run_id = "bench-" + uuid.uuid4().hex
-    name = run_id
+    name = test_container_name(args.project_name, run_id)
     mode = args.mode
     cmd = ["docker", "run", "--rm", "--pull", "never", "--name", name,
            "--cpus", str(args.cpus), "--memory", f"{args.memory_mib}m",
@@ -85,6 +90,7 @@ def run_sample(args, image_id):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--image", required=True)
+    p.add_argument("--project-name", default=os.getenv("PROJECT_NAME") or os.getenv("GITHUB_REPOSITORY", "gamehack/qjai-agent-template").split("/")[-1])
     p.add_argument("--mode", choices=["smoke", "live"], default="smoke")
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--timeout-seconds", type=int, default=60)
@@ -94,6 +100,10 @@ def main():
     p.add_argument("--report", default="benchmark-report.json")
     p.add_argument("--allow-live", action="store_true")
     a = p.parse_args()
+    try:
+        validate_project(a.project_name, "agent")
+    except ValueError as exc:
+        p.error(str(exc))
     if not (1 <= a.repeats <= 20 and 1 <= a.timeout_seconds <= 14400
             and a.repeats*(a.timeout_seconds+30) <= 18000
             and 0.25 <= a.cpus <= 4 and 128 <= a.memory_mib <= 8192):
@@ -103,7 +113,7 @@ def main():
     datetime.strptime(a.business_date, "%Y-%m-%d")
     image_id = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", a.image], text=True).strip()
     samples = []
-    report = {"schema_version": 1, "mode": a.mode, "image_id": image_id,
+    report = {"schema_version": 1, "project_name": a.project_name, "mode": a.mode, "image_id": image_id,
               "git_sha": os.getenv("GITHUB_SHA"), "business_date": a.business_date,
               "limits": {"docker_cpus": a.cpus, "memory_mib": a.memory_mib, "sample_timeout_seconds": a.timeout_seconds},
               "samples": samples}

@@ -23,18 +23,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Validate project naming and derive image identity
+        run: python scripts/check_naming.py --type agent --github-env
       - name: Check Modal adapter syntax
         run: python -m py_compile modal_app.py modal_client.py
       - name: Check committed dependency lock
         run: test -s requirements.lock
       - name: Build amd64 container
         run: |
-          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
           docker build --platform linux/amd64 \
+            --build-arg "QJAI_PROJECT_NAME=$PROJECT_NAME" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             -t "$IMAGE:sha-$GITHUB_SHA" .
+      - name: Verify OCI identity
+        run: |
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.title"}}' "$IMAGE:sha-$GITHUB_SHA")" = "$PROJECT_NAME"
       - name: Unit tests in built container
         run: |
           docker run --rm --network none \
@@ -52,6 +56,8 @@ jobs:
           assert data["status"] == "succeeded"
           assert data["run_id"] == "ci-smoke"
           assert data["mode"] == "smoke"
+          import os
+          assert data["agent_name"] == os.environ["PROJECT_NAME"]
           print(data)
           PY
       - name: Benchmark report unit tests

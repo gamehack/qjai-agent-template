@@ -38,6 +38,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Validate project naming and derive image identity
+        run: python scripts/check_naming.py --type agent --github-env
       - name: Validate benchmark settings
         env:
           MODE: ${{ inputs.mode }}
@@ -53,13 +55,18 @@ jobs:
           PY
       - run: python -m unittest discover -s tests_host -v
       - name: Build local benchmark image (no publish)
-        run: docker build --platform linux/amd64 -t qjai-benchmark:${GITHUB_SHA} .
+        run: |
+          docker build --platform linux/amd64 \
+            --build-arg "QJAI_PROJECT_NAME=$PROJECT_NAME" \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "$IMAGE:sha-$GITHUB_SHA" .
       - name: Offline benchmark
         if: inputs.mode == 'smoke'
         env:
           REPEATS: ${{ inputs.repeats }}
           SAMPLE_TIMEOUT: ${{ inputs.timeout_seconds }}
-        run: python scripts/benchmark.py --image "qjai-benchmark:$GITHUB_SHA" --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
+        run: python scripts/benchmark.py --image "$IMAGE:sha-$GITHUB_SHA" --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
       - name: Explicitly approved live benchmark
         if: inputs.mode == 'live' && inputs.confirm_live
         env:
@@ -67,7 +74,7 @@ jobs:
           SAMPLE_TIMEOUT: ${{ inputs.timeout_seconds }}
           OPENAI_API_KEY: ${{ secrets.BENCHMARK_OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ vars.BENCHMARK_OPENAI_MODEL }}
-        run: python scripts/benchmark.py --image "qjai-benchmark:$GITHUB_SHA" --mode live --allow-live --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
+        run: python scripts/benchmark.py --image "$IMAGE:sha-$GITHUB_SHA" --mode live --allow-live --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
