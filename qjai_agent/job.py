@@ -2,9 +2,11 @@
 import os
 
 
-def execute(mode: str, prompt: str) -> str:
+def execute_with_metrics(mode: str, prompt: str) -> tuple[str, dict]:
     if mode == "smoke":
-        return "qjai-agent-template smoke test OK"
+        return "qjai-agent-template smoke test OK", {
+            "requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0,
+        }
     if mode != "live":
         raise ValueError("unsupported AGENT_MODE")
     model = os.environ.get("OPENAI_MODEL")
@@ -19,4 +21,12 @@ def execute(mode: str, prompt: str) -> str:
         model=model,
     )
     result = Runner.run_sync(agent, prompt, max_turns=5)
-    return str(result.final_output)
+    usage = result.context_wrapper.usage
+    return str(result.final_output), {
+        name: getattr(usage, name, None)
+        for name in ("requests", "input_tokens", "output_tokens", "total_tokens")
+    }
+
+
+def execute(mode: str, prompt: str) -> str:
+    return execute_with_metrics(mode, prompt)[0]

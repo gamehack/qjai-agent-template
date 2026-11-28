@@ -9,3 +9,4 @@ dist/
 build/
 .venv-modal/
 .modal.toml
+benchmark-report.json

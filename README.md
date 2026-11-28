@@ -4,7 +4,7 @@
 
 - OpenAI Agents SDK / Python 3.12
 - OCI 镜像交付，业务代码不依赖计算平台
-- 自建 n8n 统一调度；Modal Functions 按需执行（后续接入）
+- 自建 n8n 统一调度；Modal Functions 按需执行（Smoke 端到端验收通过）
 - 默认 smoke 模式，不调用模型，不执行外部业务副作用
 
 ## 本地验证
@@ -38,7 +38,7 @@ docker run --rm --env-file .env -e AGENT_MODE=live qjai-agent-template:dev
 
 环境变量：AGENT_MODE（smoke/live）、AGENT_NAME、RUN_ID（可选）、BUSINESS_DATE（UTC 日期默认值；生产由 n8n 明确传入）、AGENT_INPUT、OPENAI_MODEL。
 
-stdout 输出单行 JSON 结果，包含 run_id、agent_name、business_date、status、mode、duration_ms、output；失败退出码非零，stderr 仅记录错误类型，不输出 API 密钥。业务代码位于 qjai_agent/job.py。RUN_ID 用于追踪，不代表已实现持久化去重。
+stdout 输出单行 JSON 结果，包含 run_id、agent_name、business_date、status、mode、duration_ms、output、usage；失败退出码非零，stderr 仅记录错误类型，不输出 API 密钥。业务代码位于 qjai_agent/job.py。RUN_ID 用于追踪，不代表已实现持久化去重。
 
 ## 实施阶段
 
@@ -47,3 +47,7 @@ stdout 输出单行 JSON 结果，包含 run_id、agent_name、business_date、s
 3. Modal Functions 适配及实际账单验证
 4. n8n 调度、状态跟踪与幂等性
 5. 真实业务 Agent 迁移
+
+## 性能基准测试
+
+[Agent performance benchmark](https://github.com/gamehack/qjai-agent-template/actions/workflows/benchmark.yml) 为手动测试工作流；默认无网络 smoke，不发布镜像、不部署 Modal。正式业务测试必须使用无副作用的 fixture，显式授权 live 模型调用。CI 对构建镜像自动进行三次离线 benchmark。报告含运行时间、CPU、内存、Token 及样本统计，不包含正文或密钥。详细定义与上线流程：[性能测试规范](docs/benchmark.md)。

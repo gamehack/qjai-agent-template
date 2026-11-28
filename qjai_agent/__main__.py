@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone, date
 
-from .job import execute
+from .job import execute_with_metrics
 
 
 def main() -> int:
@@ -20,7 +20,9 @@ def main() -> int:
     }
     try:
         date.fromisoformat(record["business_date"])
-        record["output"] = execute(mode, os.getenv("AGENT_INPUT", "Reply with a short health check message."))
+        record["output"], record["usage"] = execute_with_metrics(
+            mode, os.getenv("AGENT_INPUT", "Reply with a short health check message.")
+        )
         record["status"] = "succeeded"
         code = 0
     except Exception as exc:

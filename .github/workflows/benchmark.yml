@@ -1,0 +1,77 @@
+name: Agent performance benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Smoke (offline) or live (model costs; side-effect-free fixture only)'
+        type: choice
+        options: [smoke, live]
+        default: smoke
+      repeats:
+        description: 'Independent samples (1-20; P95 requires 20)'
+        type: number
+        default: 3
+      timeout_seconds:
+        description: 'Maximum seconds per sample (1-14400; total budget <= 5h)'
+        type: number
+        default: 60
+      confirm_live:
+        description: 'I approve paid model calls for the safe benchmark fixture'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-performance-benchmark
+  cancel-in-progress: false
+
+jobs:
+  benchmark:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate benchmark settings
+        env:
+          MODE: ${{ inputs.mode }}
+          CONFIRM_LIVE: ${{ inputs.confirm_live }}
+          REPEATS: ${{ inputs.repeats }}
+          TIMEOUT: ${{ inputs.timeout_seconds }}
+        run: |
+          python - <<'PY'
+          import os
+          n, t = int(os.environ["REPEATS"]), int(os.environ["TIMEOUT"])
+          assert 1 <= n <= 20 and 1 <= t <= 14400 and n*(t+30) <= 18000
+          assert os.environ["MODE"] == "smoke" or os.environ["CONFIRM_LIVE"] == "true"
+          PY
+      - run: python -m unittest discover -s tests_host -v
+      - name: Build local benchmark image (no publish)
+        run: docker build --platform linux/amd64 -t qjai-benchmark:${GITHUB_SHA} .
+      - name: Offline benchmark
+        if: inputs.mode == 'smoke'
+        env:
+          REPEATS: ${{ inputs.repeats }}
+          SAMPLE_TIMEOUT: ${{ inputs.timeout_seconds }}
+        run: python scripts/benchmark.py --image "qjai-benchmark:$GITHUB_SHA" --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
+      - name: Explicitly approved live benchmark
+        if: inputs.mode == 'live' && inputs.confirm_live
+        env:
+          REPEATS: ${{ inputs.repeats }}
+          SAMPLE_TIMEOUT: ${{ inputs.timeout_seconds }}
+          OPENAI_API_KEY: ${{ secrets.BENCHMARK_OPENAI_API_KEY }}
+          OPENAI_MODEL: ${{ vars.BENCHMARK_OPENAI_MODEL }}
+        run: python scripts/benchmark.py --image "qjai-benchmark:$GITHUB_SHA" --mode live --allow-live --repeats "$REPEATS" --timeout-seconds "$SAMPLE_TIMEOUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-report
+          path: benchmark-report.json
+          if-no-files-found: ignore
+          retention-days: 30

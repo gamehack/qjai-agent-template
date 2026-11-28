@@ -54,6 +54,17 @@ jobs:
           assert data["mode"] == "smoke"
           print(data)
           PY
+      - name: Benchmark report unit tests
+        run: python -m unittest discover -s tests_host -v
+      - name: Offline benchmark acceptance
+        run: python scripts/benchmark.py --image "$IMAGE:sha-$GITHUB_SHA" --repeats 3 --timeout-seconds 60
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-benchmark-report
+          path: benchmark-report.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Authenticate and publish
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         env:
